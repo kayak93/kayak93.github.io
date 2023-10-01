@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Attention Test Game</title>
+<style>
+    body {
+        font-family: Arial, sans-serif;
+        text-align: center;
+        background-color: #f0f0f0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding-top: 20px;
+    }
+    h1 {
+        margin-bottom: 10px;
+        color: #333;
+    }
+    #info, #results {
+        margin-bottom: 20px;
+        color: #555;
+    }
+    #demoButton, #startButton {
+        padding: 10px 20px;
+        font-size: 16px;
+        cursor: pointer;
+        border: none;
+        background-color: #008CBA;
+        color: white;
+        border-radius: 5px;
+        margin-bottom: 20px;
+    }
+    #square {
+        width: 50vmin;
+        height: 50vmin;
+        display: none;
+        margin: 0 auto;  /* Center the square */
+    }
+    #results {
+        display: none;
+        background-color: #fff;
+        padding: 20px;
+        border-radius: 5px;
+        box-shadow: 0 0 10px rgba(0,0,0,0.1);
+    }
+</style>
+</head>
+<body>
+<h1>Attention Test</h1>
+<p id="info">
+    Click the "Demo Run" button to begin the practice round. During the demo, gray and black squares will appear. Click ONLY the black squares. If successful, you can proceed to the main test.
+</p>
+<button id="demoButton" onclick="startDemo()">Demo Run</button>
+<button id="startButton" onclick="startTest()" style="display:none">Start Main Test</button>
+<div id="square" onclick="squareClicked()"></div>
+<div id="results"></div>
+
+<script>
+    let isDemo = true;
+    let isTestRunning = false;
+    let isSquareVisible = false;
+    let graySquareWrongPressCount = 0;
+    let blackSquareMissedCount = 0;
+    let blackSquareTimes = [];
+    let blackSquareDisplayTime = 0;
+
+    function startDemo() {
+        resetTest();
+        isTestRunning = true;
+        document.getElementById('info').style.display = 'none';
+        document.getElementById('demoButton').style.display = 'none';  // Hide demo button
+        runTest();
+    }
+
+    function startTest() {
+        resetTest();
+        isDemo = false;
+        isTestRunning = true;
+        document.getElementById('startButton').style.display = 'none';  // Hide start button
+        runTest();
+    }
+
+    function resetTest() {
+        graySquareWrongPressCount = 0;
+        blackSquareMissedCount = 0;
+        blackSquareTimes = [];
+        isDemo = true;
+    }
+
+    function runTest() {
+        let startTime = Date.now();
+        let endTime;
+        if(isDemo) {
+            endTime = startTime + 15000;  // 15 seconds for demo
+        } else {
+            endTime = startTime + 300000;  // 5 minutes for actual test
+        }
+
+        function nextStep() {
+            if (isTestRunning && Date.now() < endTime) {
+                if (isSquareVisible) {
+                    hideSquare();
+                    setTimeout(nextStep, Math.random() * 2000 + 1000);
+                } else {
+                    displayRandomSquare();
+                    setTimeout(nextStep, 1000);
+                }
+            } else {
+                endTest();
+            }
+        }
+
+        setTimeout(nextStep, Math.random() * 2000 + 1000);  // Initial break before displaying the first square
+    }
+
+    function displayRandomSquare() {
+        hideSquare();  // Ensure previous square is hidden
+        let isGray = Math.random() < 0.7;
+        let square = document.getElementById('square');
+        square.style.backgroundColor = isGray ? 'gray' : 'black';
+        square.style.display = 'block';
+        isSquareVisible = true;
+        if (!isGray) {
+            blackSquareDisplayTime = performance.now();  // Using performance.now for more accuracy
+        }
+    }
+
+    function hideSquare() {
+        let square = document.getElementById('square');
+        square.style.display = 'none';
+        isSquareVisible = false;
+        if (blackSquareDisplayTime && square.style.backgroundColor === 'black') {
+            blackSquareMissedCount++;
+            blackSquareDisplayTime = 0;  // Reset blackSquareDisplayTime
+        }
+    }
+
+    function squareClicked() {
+        if (isSquareVisible) {
+            let square = document.getElementById('square');
+            if (square.style.backgroundColor === 'gray') {
+                graySquareWrongPressCount++;
+                square.style.backgroundColor = 'red';
+            } else {
+                square.style.backgroundColor = 'green';
+                blackSquareTimes.push(performance.now() - blackSquareDisplayTime);
+                blackSquareDisplayTime = 0;  // Reset blackSquareDisplayTime
+            }
+        }
+    }
+
+    function endTest() {
+        isTestRunning = false;
+        hideSquare();
+        if (isDemo) {
+            if (graySquareWrongPressCount === 0 && blackSquareMissedCount === 0) {
+                document.getElementById('info').innerHTML = 'You passed the demo. Click the button below to start the main test.';
+                document.getElementById('info').style.display = 'block';
+                document.getElementById('startButton').style.display = 'block';  // Show start button
+            } else {
+                document.getElementById('info').innerHTML = 'You made mistakes during the demo. Click the button below to try the demo again.';
+                document.getElementById('info').style.display = 'block';
+                document.getElementById('demoButton').style.display = 'block';  // Show demo button
+            }
+        } else {
+            let resultsDiv = document.getElementById('results');
+            let totalResponseTime = blackSquareTimes.reduce((sum, time) => sum + time, 0);
+            let averageResponseTime = (totalResponseTime / blackSquareTimes.length).toFixed(2);
+            let variance = blackSquareTimes.reduce((sum, time) => sum + Math.pow(time - averageResponseTime, 2), 0) / (blackSquareTimes.length - 1);
+            let standardDeviation = Math.sqrt(variance).toFixed(2);  // Calculating the square root of variance
+            resultsDiv.innerHTML = `
+            <p>Gray squares wrong press count: ${graySquareWrongPressCount}</p>
+            <p>Black squares missed count: ${blackSquareMissedCount}</p>
+            <p>Average response time: ${averageResponseTime} ms</p>
+            <p>Standard Deviation: ${standardDeviation} ms</p>  <!-- Displaying the standard deviation -->
+            `;
+            resultsDiv.style.display = 'block';
+        }
+    }
+
+</script>
+</body>
+</html>
