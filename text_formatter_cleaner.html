@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Text Formatting Cleaner | Instant Style Remover (Keeps Bold & Italics)</title>
+<meta name="description" content="Paste any rich‑text snippet and this free tool strips fonts, colors, and other junk while preserving bold, italics, and line breaks—auto‑copies the cleaned result after a brief preview delay.">
+<meta name="keywords" content="text cleaner, automatic paste cleaner, remove formatting, keep bold, keep italics, email plain text, dark mode text, html parser">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="canonical" href="https://example.com/text-formatting-cleaner">
+<meta property="og:title" content="Instant Text Formatting Cleaner – Paste & Go">
+<meta property="og:description" content="Clean copied text in one step. Paste, watch a quick cleanup animation, and get a ready‑to‑send result copied to your clipboard.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://example.com/text-formatting-cleaner">
+<meta property="og:locale" content="en_US">
+<meta name="robots" content="index, follow">
+<style>
+  /* Global white theme */
+  body{
+    font-family:system-ui,-apple-system,sans-serif;
+    margin:0;
+    padding:2rem;
+    background:#fff;
+    color:#111;
+  }
+  h1{font-size:2rem;margin-bottom:0.5rem;text-align:center;}
+  p{max-width:720px;margin:0 auto 1.5rem;}
+  .container{max-width:960px;margin:0 auto;}
+
+  /* shared styles */
+  .box{
+    position:relative; /* for spinner overlay */
+    width:100%;
+    min-height:200px;
+    padding:1rem;
+    border:1px solid #ddd;
+    border-radius:0.5rem;
+    font-size:1rem;
+    line-height:1.5;
+    background:#fff;
+    white-space:pre-wrap;
+    overflow:auto;
+    transition:opacity 0.2s;
+  }
+  #editor:empty:before{content:attr(data-placeholder);color:#888;}
+  /* spinner shown while cleaning */
+  .cleaning{opacity:0.6;pointer-events:none;}
+  .cleaning::after{
+    content:"";
+    position:absolute;
+    top:50%;left:50%;
+    width:28px;height:28px;
+    margin:-14px 0 0 -14px;
+    border:3px solid #2563eb;
+    border-top-color:transparent;
+    border-radius:50%;
+    animation:spin 0.8s linear infinite;
+  }
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  button{
+    display:inline-flex;
+    align-items:center;
+    gap:0.5rem;
+    margin-top:1rem;
+    padding:0.75rem 1.5rem;
+    font-size:1rem;
+    border:none;
+    border-radius:0.5rem;
+    cursor:pointer;
+    background:#2563eb;
+    color:#fff;
+    transition:background 0.2s,transform 0.1s;
+  }
+  button:hover{background:#1e40af;}
+  button.copied{background:#16a34a;}
+  button svg{width:1rem;height:1rem;stroke-width:2;stroke:#fff;fill:none;}
+
+  footer{font-size:0.875rem;text-align:center;margin:2rem 0;color:#555;}
+</style>
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "Text Formatting Cleaner",
+  "description": "Remove unwanted formatting while keeping bold, italics, and line breaks.",
+  "applicationCategory": "Utility",
+  "operatingSystem": "All"
+}
+</script>
+</head>
+<body>
+<div class="container">
+  <h1>Text Formatting Cleaner</h1>
+  <p>Paste your formatted text below—you’ll briefly see the original, then it cleans itself and copies to your clipboard. Need it again? Hit <em>Copy&nbsp;Clean&nbsp;Text</em>.</p>
+  
+  <div id="editor" class="box" contenteditable="true" role="textbox" aria-label="Paste area" data-placeholder="Paste (Ctrl + V) here…"></div>
+  <button id="copyBtn" aria-label="Copy cleaned text to clipboard">
+    <span class="label">Copy Clean Text</span>
+    <svg class="check" viewBox="0 0 16 16" hidden><polyline points="2 9 6 13 14 3"></polyline></svg>
+  </button>
+  
+  <footer>&copy; 2025 Text Formatting Cleaner. Built for seamless email preparation.</footer>
+</div>
+
+<script>
+(function(){
+  const DELAY_MS = 800; // delay before cleaning so user sees raw paste & spinner
+
+  const allowedTags = ["B","STRONG","I","EM","BR"];
+  const blockTags   = ["P","DIV","LI","UL","OL","SECTION","ARTICLE","HEADER","FOOTER","MAIN"];
+  const editor   = document.getElementById("editor");
+  const copyBtn  = document.getElementById("copyBtn");
+  const labelEl  = copyBtn.querySelector('.label');
+  const checkEl  = copyBtn.querySelector('.check');
+
+  // Cleaning routine – keeps <b>, <i>, and <br>, converts block tags to newlines.
+  function sanitizeHTML(input){
+    const parser = new DOMParser();
+    const doc = parser.parseFromString('<div>'+input+'</div>', 'text/html');
+    const root = doc.body;
+
+    function walk(node){
+      let out = "";
+      node.childNodes.forEach(child=>{
+        if(child.nodeType === Node.TEXT_NODE){
+          out += child.textContent;
+        } else if(child.nodeType === Node.ELEMENT_NODE){
+          const tag = child.tagName;
+          if(allowedTags.includes(tag)){
+            if(tag === "BR"){
+              out += "\n";
+            } else {
+              out += `<${tag.toLowerCase()}>` + walk(child) + `</${tag.toLowerCase()}>`;
+            }
+          } else {
+            const needsBreak = blockTags.includes(tag);
+            if(needsBreak) out += "\n";
+            out += walk(child);
+            if(needsBreak) out += "\n";
+          }
+        }
+      });
+      return out;
+    }
+
+    return walk(root)
+            .replace(/&nbsp;/gi,' ')
+            .replace(/\n{3,}/g,"\n\n")
+            .trim();
+  }
+
+  // Clipboard helpers – copy both HTML & plain variants where possible
+  async function copyToClipboard(htmlString){
+    const plainString = htmlString.replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]*>/g,'');
+
+    if(navigator.clipboard && navigator.clipboard.write){
+      try{
+        const item = new ClipboardItem({
+          'text/html': new Blob([htmlString], {type: 'text/html'}),
+          'text/plain': new Blob([plainString], {type: 'text/plain'})
+        });
+        await navigator.clipboard.write([item]);
+        return;
+      }catch(err){/* fallback below */}
+    }
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      return navigator.clipboard.writeText(htmlString);
+    }
+    const ta = document.createElement('textarea');
+    ta.value = htmlString;
+    ta.style.position='fixed';
+    ta.style.opacity='0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+
+  function showCopied(){
+    labelEl.textContent = 'Copied!';
+    checkEl.hidden = false;
+    copyBtn.classList.add('copied');
+    setTimeout(()=>{
+      labelEl.textContent = 'Copy Clean\u00A0Text';
+      checkEl.hidden = true;
+      copyBtn.classList.remove('copied');
+    },2000);
+  }
+
+  // Handle paste: show raw for a moment, display spinner, then clean & copy
+  editor.addEventListener('paste', async e=>{
+    e.preventDefault();
+    const html = e.clipboardData.getData('text/html') || e.clipboardData.getData('text/plain');
+    editor.innerHTML = html;       // show original formatting
+    editor.classList.add('cleaning');
+
+    setTimeout(async ()=>{
+      const cleaned = sanitizeHTML(html);
+      const htmlVersion = cleaned.replace(/\n/g,'<br>');
+      editor.innerHTML = htmlVersion;
+      editor.classList.remove('cleaning');
+      await copyToClipboard(htmlVersion);
+      showCopied();
+    }, DELAY_MS);
+  });
+
+  // Manual copy button
+  copyBtn.addEventListener('click', async ()=>{
+    const htmlVersion = editor.innerHTML;
+    await copyToClipboard(htmlVersion);
+    showCopied();
+  });
+})();
+</script>
+</body>
+</html>
